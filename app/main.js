@@ -11,8 +11,8 @@ const server = net.createServer((connection) => {
     const command = Buffer.from(data).toString.split("\r\n")
     //command["$5", "ECHO", "$3", "hey"]
 
-    if (command[2] == "ECHO") {
-        const stringEcho = command[command.length - 1]
+    if (command[1] == "ECHO") {
+        const stringEcho = command[command.length - 2]
         const leng = stringEcho.length
 
         return connection.write("$" + leng + "\r\n" + stringEcho + "\r\n")
