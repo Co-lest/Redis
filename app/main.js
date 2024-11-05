@@ -12,7 +12,7 @@ const server = net.createServer((connection) => {
     //command["*2", "$5", "ECHO", "$3", "hey"]
  
     if (commands[2] == "ECHO") {
-      const stringEcho = commands[commands.length - 1];
+      const stringEcho = commands[4];
       const len = stringEcho.length;
       return connection.write("$" + len + "\r\n" + stringEcho + "\r\n");
     }
