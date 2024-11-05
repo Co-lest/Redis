@@ -11,25 +11,28 @@ const server = net.createServer((connection) => {
     const commands = Buffer.from(data).toString().split("\r\n");
  
     if (commands[2] == "ECHO") { //command["*2", "$5", "ECHO", "$3", "hey", "\r\n"]
-      const stringEcho = commands[commands.length - 2];
+      const stringEcho = commands[4];
       const len = stringEcho.length;
       return connection.write("$" + len + "\r\n" + stringEcho + "\r\n");
     }
-    const command = commands[2];   // The command itself (e.g., "SET" or "GET")
-    const key = commands[4];       // The key for SET/GET operations
+
+    const command = commands[4]; // set or get
+
+    const map = new map();
 
     if (command === "SET") {
-        const value = commands[6];
-        database[key] = value;
-        connection.write("+OK\r\n");
+        map.set(commands[8], commands[12])
 
+        return connection.write("+OK\r\n");
     } else if (command === "GET") {
-        const value = database[key];
-        if (value !== undefined) {
-            const length = value.length;
-            connection.write("$" + length + "\r\n" + value + "\r\n");
+        if (commands.length < 10) {
+            return connection.write("$-1\r\n");
+        }
+        
+        if (map.get(commands[8]) == undefined) {
+            return connection.write("$-1\r\n");
         } else {
-            connection.write("$-1\r\n");
+            connection.write("$" + (map.get(commands[8])).length + "\r\n" + map.get(commands[8]) + "\r\n"); // $3\r\nbar\r\n
         }
     }
 
@@ -40,4 +43,5 @@ const server = net.createServer((connection) => {
 server.listen(6379, "127.0.0.1");
 
 
-//*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n
+// *3 \r\n $3 \r\n SET \r\n $3 \r\n foo \r\n $3 \r\n bar \r\n
+// *3 \r\n $3 \r\n GET \r\n $3 \r\n foo \r\n
