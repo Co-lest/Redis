@@ -17,7 +17,8 @@ const server = net.createServer((connection) => {
     } else if (commands[2] == "SET") {//command["*2", "$5", "SET", "$3", "hey"]
         return connection.write("+OK\r\n")
     } else if(commands[2] == "GET") {
-        return connection.write("$3\r\nbar\r\n")
+        const len2 = commands[5].length
+        return connection.write("$" + len2 + "\r\n" + commands[5] + "\r\n")
     }
 
     connection.write("+PONG\r\n")
