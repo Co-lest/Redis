@@ -14,11 +14,23 @@ const server = net.createServer((connection) => {
       const stringEcho = commands[commands.length - 2];
       const len = stringEcho.length;
       return connection.write("$" + len + "\r\n" + stringEcho + "\r\n");
-    } else if (commands[2] == "SET") {//command["*2", "$5", "SET", "$3", "hey"]
-        return connection.write("+OK\r\n")
-    } else if(commands[2] == "GET") {  //command["*3", "\r\n",  "SET", "\r\n" "$3", "\r\n", "foo", "\r\n", "$3", "\r\n", "bar", "\r\n"]
-        const len2 = commands[10].length
-        return connection.write("$" + len2 + "\r\n" + commands[10] + "\r\n")
+    }
+    const command = commands[2];   // The command itself (e.g., "SET" or "GET")
+    const key = commands[4];       // The key for SET/GET operations
+
+    if (command === "SET") {
+        const value = commands[6];
+        database[key] = value;
+        connection.write("+OK\r\n");
+
+    } else if (command === "GET") {
+        const value = database[key];
+        if (value !== undefined) {
+            const length = value.length;
+            connection.write("$" + length + "\r\n" + value + "\r\n");
+        } else {
+            connection.write("$-1\r\n");
+        }
     }
 
     connection.write("+PONG\r\n")
