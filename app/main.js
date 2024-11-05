@@ -9,12 +9,15 @@ const server = net.createServer((connection) => {
   connection.on("data", (data) => {
     // *2\r\n $5 \r\n ECHO \r\n $3 \r\n hey \r\n
     const commands = Buffer.from(data).toString().split("\r\n");
-    //command["*2", "$5", "ECHO", "$3", "hey"]
  
-    if (commands[2] == "ECHO") {
+    if (commands[2] == "ECHO") { //command["*2", "$5", "ECHO", "$3", "hey"]
       const stringEcho = commands[4];
       const len = stringEcho.length;
       return connection.write("$" + len + "\r\n" + stringEcho + "\r\n");
+    } else if (commands[2] == "SET") {//command["*2", "$5", "SET", "$3", "hey"]
+        return connection.write("+OK\r\n")
+    } else if(commands[2] == "GET") {
+        return connection.write("$3\r\nbar\r\n")
     }
 
     connection.write("+PONG\r\n")
