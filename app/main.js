@@ -24,7 +24,7 @@ const server = net.createServer((connection) => {
         
         map.set(key, value); 
 
-        connection.write("+OK\r\n");
+        return connection.write("+OK\r\n");
 
     } else if (command === "GET") {
         const key = commands[8];
@@ -35,7 +35,7 @@ const server = net.createServer((connection) => {
 
         const value = map.get(key);
 
-        connection.write(`$${value.length}\r\n${value}\r\n`);
+        return connection.write(`$${value.length}\r\n${value}\r\n`);
     }
 
     connection.write("+PONG\r\n")
