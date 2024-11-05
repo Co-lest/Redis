@@ -8,14 +8,14 @@ const server = net.createServer((connection) => {
   // Handle connection
   connection.on("data", (data) => {
     // *2\r\n $5 \r\n ECHO \r\n $3 \r\n hey \r\n
-    const command = Buffer.from(data).toString.split("\r\n")
+
+    const commands = Buffer.from(data).toString().split("\r\n");
     //command["$5", "ECHO", "$3", "hey"]
-
-    if (command[1] == "ECHO") {
-        const stringEcho = command[command.length - 2]
-        const leng = stringEcho.length
-
-        return connection.write("$" + leng + "\r\n" + stringEcho + "\r\n")
+ 
+    if (commands[2] == "ECHO") {
+      const str = commands[4];
+      const l = str.length;
+      return connection.write("$" + l + "\r\n" + str + "\r\n");
     }
 
     connection.write("+PONG\r\n")
