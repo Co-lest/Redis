@@ -18,22 +18,24 @@ const server = net.createServer((connection) => {
 
     const command = commands[4]; // set or get
 
-    const map = new map();
-
     if (command === "SET") {
-        map.set(commands[8], commands[12])
+        const key = commands[8];
+        const value = commands[12];
+        
+        map.set(key, value); 
 
         return connection.write("+OK\r\n");
+
     } else if (command === "GET") {
-        if (commands.length < 10) {
-            return connection.write("$-1\r\n");
-        }
+        const key = commands[8];
         
-        if (map.get(commands[8]) == undefined) {
+        if (!key || !map.has(key)) {
             return connection.write("$-1\r\n");
-        } else {
-            connection.write("$" + (map.get(commands[8])).length + "\r\n" + map.get(commands[8]) + "\r\n"); // $3\r\nbar\r\n
         }
+
+        const value = map.get(key);
+
+        connection.write(`$${value.length}\r\n${value}\r\n`);
     }
 
     connection.write("+PONG\r\n")
