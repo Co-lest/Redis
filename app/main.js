@@ -26,10 +26,14 @@ const server = net.createServer((connection) => {
       return connection.write("+OK\r\n");
     } else if (commands[2] == "GET") {
       if (buff[commands[4]]) {
-        return connection.write(`$${buff[commands[4]].length}\r\n${buff[commands[4]]}\r\n`)
+        return connection.write(`$${(buff[commands[4]]).length}\r\n${buff[commands[4]]}\r\n`)
       } else {
         return connection.write(`$-1\r\n`);
       }
+    } else if (commands[2] == "CONFIG" && commands[6] == "dir") { //*2 $6 CONFIG $3 GET $10 dir
+      buff[commands[2]] = commands[6]
+    } else if (commands[2] == "CONFIG" && commands[6] !== "dir"){ //*2 $6 CONFIG $3 GET &n dbfilename
+      return connection.write(`$--dir$\r\n${(buff[commands[2]]).length}\r\n$${(commands[6]).length}\r\n${commands[6]}`)
     }
     connection.write(`+PONG\r\n`);
   });
