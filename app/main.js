@@ -1,42 +1,28 @@
-const net = require("net")
+const net = require("net");
 
-const buff = {}
+const buff = {};
 
-// You can use print statements as follows for debugging, they'll be visible when running tests.
 console.log("Logs from your program will appear here!");
 
 const server = net.createServer((connection) => {
   connection.on("data", (data) => {
-    console.log("Data received:" + data.toString());
-    const msg = data.toString().split("\r\n");
-    const command = msg[2];
-    const arg = msg[4];
-  
-    switch (command) {
-      case "echo":
-        connection.write(`$${arg.length}\r\n${arg}\r\n`);
-        break;
-      case "ping":
-        connection.write("+PONG\r\n");
-        break;
-      case "set":
-        buff[msg[4]] = msg[6];
-        connection.write("+OK\r\n");
-        break;
-      case "get":
-        connection.write(
-          `$${buff[msg[4]].length}\r\n${buff[msg[4]]}\r\n` || "$-1\r\n"
-        );
-        break;
-      default:
-        connection.write("+PONG\r\n");
-        break;
+    // *2\r\n $5 \r\n ECHO \r\n $3 \r\n hey \r\n
+    const commands = Buffer.from(data).toString().split("\r\n");
+    //command["*2", "$5", "ECHO", "$3", "hey"]
+
+    if (commands[2] == "ECHO") {
+      const stringEcho = commands[4];
+      const len = stringEcho.length;
+      return connection.write("$" + len + "\r\n" + stringEcho + "\r\n");
+    } else if (commands[2] == "SET") {
+      buff[msg[4]] = msg[6];
+      return connection.write("+OK\r\n");
+    } else if (commands[2] == "GET") {
+      return connection.write(
+        `$${buff[msg[4]].length}\r\n${buff[msg[4]]}\r\n` || "$-1\r\n"
+      );
     }
-  })
+    connection.write("+PONG\r\n");
+  });
 });
-
 server.listen(6379, "127.0.0.1");
-
-// have tried so much
-// *3 \r\n $3 \r\n SET \r\n $3 \r\n foo \r\n $3 \r\n bar \r\n
-// *3 \r\n $3 \r\n GET \r\n $3 \r\n foo \r\n
