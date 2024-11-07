@@ -27,11 +27,11 @@ const server = net.createServer((connection) => {
     } else if (commands[2] == "GET") {
       if (buff[commands[4]] == "") {
         return connection.write("$-1\r\n")
+      } else {
+        return connection.write(
+          `$${buff[commands[4]].length}\r\n${buff[commands[4]]}\r\n` || "$-1\r\n"
+        );
       }
-
-      return connection.write(
-        `$${buff[commands[4]].length}\r\n${buff[commands[4]]}\r\n` || "$-1\r\n"
-      );
     }
     connection.write("+PONG\r\n");
   });
