@@ -1,19 +1,35 @@
-const net = require("net");
+const net = require("net")
+
+const buff = {}
 
 // You can use print statements as follows for debugging, they'll be visible when running tests.
 console.log("Logs from your program will appear here!");
 
-//Uncomment this block to pass the first stage
 const server = net.createServer((connection) => {
   console.log("Data received:" + data.toString());
   const msg = data.toString().split("\r\n");
   const command = msg[2];
   const arg = msg[4];
 
-  switch(command) {
-    case "PING":
-      connection.write(`"+PONG\r\n"`)
-      break
+  switch (command) {
+    case "echo":
+      connection.write(`$${arg.length}\r\n${arg}\r\n`);
+      break;
+    case "ping":
+      connection.write("+PONG\r\n");
+      break;
+    case "set":
+      buff[msg[4]] = msg[6];
+      connection.write("+OK\r\n");
+      break;
+    case "get":
+      connection.write(
+        `$${buff[msg[4]].length}\r\n${buff[msg[4]]}\r\n` || "$-1\r\n"
+      );
+      break;
+    default:
+      connection.write("+PONG\r\n");
+      break;
   }
 });
 
