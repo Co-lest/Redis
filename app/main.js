@@ -6,31 +6,33 @@ const buff = {}
 console.log("Logs from your program will appear here!");
 
 const server = net.createServer((connection) => {
-  console.log("Data received:" + data.toString());
-  const msg = data.toString().split("\r\n");
-  const command = msg[2];
-  const arg = msg[4];
-
-  switch (command) {
-    case "echo":
-      connection.write(`$${arg.length}\r\n${arg}\r\n`);
-      break;
-    case "ping":
-      connection.write("+PONG\r\n");
-      break;
-    case "set":
-      buff[msg[4]] = msg[6];
-      connection.write("+OK\r\n");
-      break;
-    case "get":
-      connection.write(
-        `$${buff[msg[4]].length}\r\n${buff[msg[4]]}\r\n` || "$-1\r\n"
-      );
-      break;
-    default:
-      connection.write("+PONG\r\n");
-      break;
-  }
+  connection.on("data", (data) => {
+    console.log("Data received:" + data.toString());
+    const msg = data.toString().split("\r\n");
+    const command = msg[2];
+    const arg = msg[4];
+  
+    switch (command) {
+      case "echo":
+        connection.write(`$${arg.length}\r\n${arg}\r\n`);
+        break;
+      case "ping":
+        connection.write("+PONG\r\n");
+        break;
+      case "set":
+        buff[msg[4]] = msg[6];
+        connection.write("+OK\r\n");
+        break;
+      case "get":
+        connection.write(
+          `$${buff[msg[4]].length}\r\n${buff[msg[4]]}\r\n` || "$-1\r\n"
+        );
+        break;
+      default:
+        connection.write("+PONG\r\n");
+        break;
+    }
+  })
 });
 
 server.listen(6379, "127.0.0.1");
