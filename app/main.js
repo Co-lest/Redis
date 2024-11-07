@@ -25,7 +25,7 @@ const server = net.createServer((connection) => {
       }
       return connection.write("+OK\r\n");
     } else if (commands[2] == "GET") {
-      if (buff[commands[4]] == "") {
+      if (buff[commands[4]]) {
         return connection.write("$-1\r\n")
       } else {
         return connection.write(
