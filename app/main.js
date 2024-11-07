@@ -15,11 +15,11 @@ const server = net.createServer((connection) => {
       const len = stringEcho.length;
       return connection.write("$" + len + "\r\n" + stringEcho + "\r\n");
     } else if (commands[2] == "SET") {
-      buff[msg[4]] = msg[6];
+      buff[commands[4]] = commands[6];
       return connection.write("+OK\r\n");
     } else if (commands[2] == "GET") {
       return connection.write(
-        `$${buff[msg[4]].length}\r\n${buff[msg[4]]}\r\n` || "$-1\r\n"
+        `$${buff[commands[4]].length}\r\n${buff[commands[4]]}\r\n` || "$-1\r\n"
       );
     }
     connection.write("+PONG\r\n");
