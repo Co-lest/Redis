@@ -17,7 +17,7 @@ const server = net.createServer((connection) => {
       return connection.write("$" + len + "\r\n" + stringEcho + "\r\n");
     } else if (commands[2] == "SET") {
       buff[commands[4]] = commands[6];
-      if ((commands[8]).toLocaleLowerCase() == "pt") {
+      if ((commands[10])) { //(commands[8]).toLocaleLowerCase() == "pt"
         duration = commands[10]
         setTimeout(() => {
           delete buff[commands[4]]
@@ -28,9 +28,7 @@ const server = net.createServer((connection) => {
       if (buff[commands[4]]) {
         return connection.write(`$${buff[commands[4]].length}\r\n${buff[commands[4]]}\r\n`)
       } else {
-        return connection.write(
-          `$-1\r\n`
-        );
+        return connection.write(`$-1\r\n`);
       }
     }
     connection.write(`+PONG\r\n`);
