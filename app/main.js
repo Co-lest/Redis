@@ -9,7 +9,19 @@ const server = net.createServer((connection) => {
   connection.on("data", (data) => {
     // *2\r\n $5 \r\n ECHO \r\n $3 \r\n hey \r\n
     const commands = Buffer.from(data).toString().split("\r\n");
-    //command["*2", "$5", "ECHO", "$3", "hey"]
+    const inputString = data.toString();
+		const inputArray = inputString.split('\r\n');
+
+    const [,, dir, path, dbfilename, file] = process.argv;
+
+    const [, , command, , key = '', , value = '',,key2='',, value2=''] = inputArray;
+		const cmd = command.toLowerCase();
+		const cmd2 = value2.toLowerCase();
+
+    if (key2 === cmd2) {
+			dataStore.set(cmd2, value2)
+		  }
+		
 
     if (commands[2] == "ECHO") {
       const stringEcho = commands[4];
@@ -30,8 +42,14 @@ const server = net.createServer((connection) => {
       } else {
         return connection.write(`$-1\r\n`);
       }
-    } else if (commands[2] == "--dir") { //*2 \r\n $3 \r\n dir \r\n $16 \r\n/ tmp/redis-files \r\n
-      return connection.write(`$${(commands[4]).length}\r\n${commands[4]}\r\n$${(commands[8]).length}\r\n${commands[length]}\r\n`);
+    } else if (cmd == "config") { //*2 \r\n $3 \r\n dir \r\n $16 \r\n/ tmp/redis-files \r\n
+      dataStore.set('dir', path);
+      dataStore.set('dbfilename', file);
+      let result = dataStore.get(value);
+      console.log(result);
+      const responseArr = [`$${value.length}\r\n${value}\r\n`, `$${result.length}\r\n${result}\r\n`];
+      const redisResponse = `*${responseArr.length}\r\n${responseArr.join('')}`;
+      return connection.write(redisResponse);
     }
     connection.write(`+PONG\r\n`);
   });
