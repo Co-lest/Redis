@@ -2,6 +2,7 @@ const net = require("net");
 
 const buff = {};
 let duration;
+let dataStore = new Map()
 
 console.log("Logs from your program will appear here!");
 
