@@ -1,6 +1,6 @@
 const redisMagic = {
-    redisMagicString: 5,
-    redisMagicVersion: 4,
+	REDIS_MAGIC_STRING: 5,
+	REDIS_VERSION: 4,
 }
 
 const codes = {

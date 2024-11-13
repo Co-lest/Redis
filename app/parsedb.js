@@ -1,4 +1,5 @@
 const { redisMagic, codes } = require('./data.js');
+
 function handleLengthEncoding(data, cursor) {
 	const byte = data[cursor];
 	const lengthType = (byte & 0b11000000) >> 6;
