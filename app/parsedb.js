@@ -16,26 +16,35 @@ function handleLengthEncoding(data, cursor) {
 function getKeysValues(data) {
 	const { REDIS_MAGIC_STRING, REDIS_VERSION } = redisMagic;
 	let cursor = REDIS_MAGIC_STRING + REDIS_VERSION;
+
 	while (cursor < data.length) {
 		if (data[cursor] === codes.SELECTDB) {
 			break;
 		}
 		cursor++;
 	}
+
 	cursor++;
 	let length;
 	[length, cursor] = handleLengthEncoding(data, cursor);
 	cursor++;
 	[length, cursor] = handleLengthEncoding(data, cursor);
 	[length, cursor] = handleLengthEncoding(data, cursor);
+
 	if (data[cursor] === codes.EXPIRETIME) {
 		cursor++;
 		cursor += 4;
 	}
+
 	cursor++;
 	const redisKeyLength = data[cursor];
 	const redisKey = data.subarray(cursor + 1, cursor + 1 + redisKeyLength).toString();
-	return redisKey;
+	//return redisKey;
+
+    cursor = redisKeyLength + 1 + cursor
+    const redisVLength = data[cursor];
+    const redisV = data.subarray(cursor + 1, 1 + cursor + redisVLength + 1).tostring();
+    return [redisKey, redisV];
 }
 module.exports = {
 	getKeysValues,

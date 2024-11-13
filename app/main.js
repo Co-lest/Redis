@@ -2,6 +2,7 @@ const net = require('net');
 const fs = require('fs');
 const { join } = require('path');
 const { getKeysValues } = require('./parsedb');
+
 const arguments = process.argv.slice(2);
 const config = new Map();
 let rdb;
@@ -23,6 +24,8 @@ if (config.get('dir') && config.get('dbfilename')) {
 			throw `Error reading DB at provided path: ${dbPath}`;
 		}
 	} else {
+    const [Rkey, Rvalue] = getKeysValues(rdb);
+    dataStore.set(Rkey, Rvalue);
 		console.log(`DB doesn't exists at provided path: ${dbPath}`);
 	}
 }
@@ -179,8 +182,11 @@ const server = net.createServer((connection) => {
 				handleConfigGetRequest(connection, parsedRequest.args[0]);
 				return;
 			case 'KEYS':
-				const redis_key = getKeysValues(rdb);
-				connection.write(serializeRESP([redis_key]));
+				//const redis_key = getKeysValues(rdb);
+				//connection.write(serializeRESP([redis_key]));
+
+        const [Rkey, Rvalue] = getKeysValues(rdb);
+        connection.write(serializeRESP([redis_key]));
 				return;
 			default:
 				connection.write('-ERR unsupported command\r\n');
