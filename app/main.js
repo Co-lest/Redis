@@ -4,7 +4,11 @@ const { join } = require('path');
 const { getKeysValues } = require('./parsedb');
 
 const arguments = process.argv.slice(2);
+
+const dataStore = new Map();
+const expiryList = new Map();
 const config = new Map();
+
 let rdb;
 
 for (let i = 0; i < arguments.length; i++) {
@@ -21,18 +25,16 @@ if (config.get('dir') && config.get('dbfilename')) {
 	if (isDbExists) {
 		rdb = fs.readFileSync(dbPath);
 		if (!rdb) {
-			throw `Error reading DB at provided path: ${dbPath}`;
+			//throw `Error reading DB at provided path: ${dbPath}`;
+      console.error(`Error reading DB at provided path: ${dbPath}`)
 		}
 	} else {
     const [Rkey, Rvalue] = getKeysValues(rdb);
     dataStore.set(Rkey, Rvalue);
-		console.log(`DB doesn't exists at provided path: ${dbPath}`);
+		//console.log(`DB doesn't exists at provided path: ${dbPath}`);
+    console.error(`DB doesn't exists at provided path: ${dbPath}`);
 	}
 }
-
-const dataStore = new Map();
-const expiryList = new Map();
-
 
 console.log('Logs from your program will appear here!');
 const serializeRESP = (obj) => {
