@@ -188,7 +188,7 @@ const server = net.createServer((connection) => {
 				//connection.write(serializeRESP([redis_key]));
 
         const [Rkey, Rvalue] = getKeysValues(rdb);
-        connection.write(serializeRESP([redis_key]));
+        connection.write(serializeRESP([Rkey]));
 				return;
 			default:
 				connection.write('-ERR unsupported command\r\n');

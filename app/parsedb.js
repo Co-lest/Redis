@@ -46,6 +46,7 @@ function getKeysValues(data) {
     const redisV = data.subarray(cursor + 1, 1 + cursor + redisVLength + 1).tostring();
     return [redisKey, redisV];
 }
+
 module.exports = {
 	getKeysValues,
 };
