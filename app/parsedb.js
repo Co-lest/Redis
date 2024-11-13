@@ -1,4 +1,4 @@
-const { redis_main_const, OPCODES } = require('./data.js');
+const { redisMagic, codes } = require('./data.js');
 function handleLengthEncoding(data, cursor) {
 	const byte = data[cursor];
 	const lengthType = (byte & 0b11000000) >> 6;
@@ -13,10 +13,10 @@ function handleLengthEncoding(data, cursor) {
 }
 
 function getKeysValues(data) {
-	const { REDIS_MAGIC_STRING, REDIS_VERSION } = redis_main_const;
+	const { REDIS_MAGIC_STRING, REDIS_VERSION } = redisMagic;
 	let cursor = REDIS_MAGIC_STRING + REDIS_VERSION;
 	while (cursor < data.length) {
-		if (data[cursor] === OPCODES.SELECTDB) {
+		if (data[cursor] === codes.SELECTDB) {
 			break;
 		}
 		cursor++;
@@ -27,7 +27,7 @@ function getKeysValues(data) {
 	cursor++;
 	[length, cursor] = handleLengthEncoding(data, cursor);
 	[length, cursor] = handleLengthEncoding(data, cursor);
-	if (data[cursor] === OPCODES.EXPIRETIME) {
+	if (data[cursor] === codes.EXPIRETIME) {
 		cursor++;
 		cursor += 4;
 	}
