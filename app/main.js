@@ -1,61 +1,192 @@
-const net = require("net");
+const net = require('net');
+const fs = require('fs');
+const { join } = require('path');
+const { getKeysValues } = require('./parsedb');
+const arguments = process.argv.slice(2);
+const config = new Map();
+let rdb;
 
-const buff = {};
-let duration;
-let dataStore = new Map()
+for (let i = 0; i < arguments.length; i++) {
+	const arg = arguments[i];
+	if (arg.startsWith('--')) {
+		config.set(arg.slice(2), arguments[i + 1]);
+		i += 1;
+	}
+}
 
-console.log("Logs from your program will appear here!");
+if (config.get('dir') && config.get('dbfilename')) {
+	const dbPath = join(config.get('dir'), config.get('dbfilename'));
+	const isDbExists = fs.existsSync(dbPath);
+	if (isDbExists) {
+		rdb = fs.readFileSync(dbPath);
+		if (!rdb) {
+			throw `Error reading DB at provided path: ${dbPath}`;
+		}
+	} else {
+		console.log(`DB doesn't exists at provided path: ${dbPath}`);
+	}
+}
+
+const dataStore = new Map();
+const expiryList = new Map();
+
+
+console.log('Logs from your program will appear here!');
+const serializeRESP = (obj) => {
+	let resp = '';
+	switch (typeof obj) {
+		case 'object':
+			if (obj.constructor === Array) {
+				const arrLen = obj.length;
+				resp += `*${arrLen}\r\n`;
+				for (let i = 0; i < arrLen; i++) {
+					resp += serializeRESP(obj[i]);
+				}
+			}
+			return resp;
+		case 'string':
+			const strLen = obj.length;
+			resp += `$${strLen}\r\n`;
+			resp += `${obj}\r\n`;
+			return resp;
+		case 'number':
+		case 'bigint':
+		case 'boolean':
+		case 'undefined':
+		default:
+			break;
+	}
+};
+const parseRESP = (arrRESP) => {
+	for (let i = 0; i < arrRESP.length; i++) {
+		const element = arrRESP.shift();
+		switch (element[0]) {
+			case '*':
+				// array
+				const arrlen = element.slice(1);
+				const arr = [];
+				for (let j = 0; j < arrlen; j++) {
+					const parsedContent = parseRESP(arrRESP);
+					arr.push(parsedContent.content);
+					arrRESP = parsedContent.arrRESP;
+				}
+				return arr;
+			case '$':
+				// bulk string
+				const strlen = element.slice(1);
+				const str = arrRESP.shift();
+				return { content: str, arrRESP };
+			case ':':
+				// integer
+				const integer = element.slice(1);
+				return { content: Number(integer), arrRESP };
+			default:
+				break;
+		}
+	}
+};
+const parseRequest = (arrRequest) => {
+	const splitedRequest = arrRequest.split('\r\n');
+	const parsedRESP = parseRESP(splitedRequest);
+	const command = parsedRESP.shift();
+	switch (command.toUpperCase()) {
+		//TODO: add handling for two word commands
+		case 'CONFIG':
+			const scndPart = parsedRESP.shift();
+			if (scndPart) {
+				return {
+					commandName: command.toUpperCase() + ' ' + scndPart.toUpperCase(),
+					args: parsedRESP,
+				};
+			} else {
+				return {
+					commandName: command.toUpperCase(),
+				};
+			}
+		default:
+			return {
+				commandName: command.toUpperCase(),
+				args: parsedRESP,
+			};
+	}
+};
+const sendPongResponse = (connection) => {
+	connection.write('+PONG\r\n');
+};
+const sendEchoResponse = (connection, content) => {
+	connection.write(`+${content}\r\n`);
+};
+const handleSetRequest = (connection, key, value, px) => {
+	dataStore.set(key, value);
+	expiryList.set(key, Date.now() + Number(px));
+	connection.write('+OK\r\n');
+};
+const handleGetRequest = (connection, key) => {
+	const element = dataStore.get(key);
+	if (!element) {
+		connection.write(`$-1\r\n`);
+		return;
+	}
+	if (expiryList.get(key) <= Date.now()) {
+		dataStore.delete(key);
+		expiryList.delete(key);
+		connection.write(`$-1\r\n`);
+	} else {
+		connection.write(`+${element}\r\n`);
+	}
+};
+const handleConfigGetRequest = (connection, key) => {
+	const value = config.get(key);
+	connection.write(serializeRESP([key, value]));
+};
+
 
 const server = net.createServer((connection) => {
-  connection.on("data", (data) => {
-    // *2\r\n $5 \r\n ECHO \r\n $3 \r\n hey \r\n
-    const commands = Buffer.from(data).toString().split("\r\n");
-    const inputString = data.toString();
-		const inputArray = inputString.split('\r\n');
-
-    const [,, dir, path, dbfilename, file] = process.argv;
-
-    const [, , command, , key = '', , value = '',,key2='',, value2=''] = inputArray;
-		const cmd = command.toLowerCase();
-		const cmd2 = value2.toLowerCase();
-
-    if (key2 === cmd2) {
-			dataStore.set(cmd2, value2)
-		  }
-		
-
-    if (commands[2] == "ECHO") {
-      const stringEcho = commands[4];
-      const len = stringEcho.length;
-      return connection.write("$" + len + "\r\n" + stringEcho + "\r\n");
-    } else if (commands[2] == "SET") {
-      buff[commands[4]] = commands[6];
-      if ((commands[10])) { //(commands[8]).toLocaleLowerCase() == "pt"
-        duration = commands[10]
-        setTimeout(() => {
-          delete buff[commands[4]]
-        }, duration);
-      }
-      return connection.write("+OK\r\n");
-    } else if (commands[2] == "GET") {
-      if (buff[commands[4]]) {
-        return connection.write(`$${(buff[commands[4]]).length}\r\n${buff[commands[4]]}\r\n`)
-      } else {
-        return connection.write(`$-1\r\n`);
-      }
-    } else if (cmd == "config") { //*2 \r\n $3 \r\n dir \r\n $16 \r\n/ tmp/redis-files \r\n
-      dataStore.set('dir', path);
-      dataStore.set('dbfilename', file);
-      let result = dataStore.get(value);
-      console.log(result);
-      const responseArr = [`$${value.length}\r\n${value}\r\n`, `$${result.length}\r\n${result}\r\n`];
-      const redisResponse = `*${responseArr.length}\r\n${responseArr.join('')}`;
-      return connection.write(redisResponse);
-    }
-    connection.write(`+PONG\r\n`);
-  });
+	console.log('connected');
+	connection.on('data', (stream) => {
+		const arrayRequest = stream.toString();
+		const parsedRequest = parseRequest(arrayRequest);
+		console.log(parsedRequest);
+		switch (parsedRequest.commandName) {
+			case 'ECHO':
+				sendEchoResponse(connection, parsedRequest.args[0]);
+				return;
+			case 'PING':
+				sendPongResponse(connection);
+				return;
+			case 'SET':
+				if (!parsedRequest.args[2]) {
+					handleSetRequest(connection, parsedRequest.args[0], parsedRequest.args[1]);
+					return;
+				}
+				switch (parsedRequest.args[2].toUpperCase()) {
+					case 'PX':
+						handleSetRequest(
+							connection,
+							parsedRequest.args[0],
+							parsedRequest.args[1],
+							parsedRequest.args[3],
+						);
+						break;
+					default:
+						break;
+				}
+				return;
+			case 'GET':
+				handleGetRequest(connection, parsedRequest.args[0]);
+				return;
+			case 'CONFIG GET':
+				handleConfigGetRequest(connection, parsedRequest.args[0]);
+				return;
+			case 'KEYS':
+				const redis_key = getKeysValues(rdb);
+				connection.write(serializeRESP([redis_key]));
+				return;
+			default:
+				connection.write('-ERR unsupported command\r\n');
+				return;
+		}
+	});
 });
-server.listen(6379, "127.0.0.1");
 
-
-//*2 $n --dir $n /tmp/redis-files $n --dbfilename $n dump.rdb
+server.listen(6379,'127.0.0.1',  () => {console.log("Connected to prt 127.0.0.1")});
