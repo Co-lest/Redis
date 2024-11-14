@@ -162,15 +162,6 @@ const server = net.createServer((connection) => {
     //   return;
     // }
 
-    switch (parsedRequest.args[0]) {
-      case "*":
-        const redisFullData = getFullData(rdb);
-        connection.write(serializeRESP([redisFullData]));
-        return;
-      default:
-          connection.write("-ERR unsupported command\r\n");
-    }
-
     switch (parsedRequest.commandName) {
       case "ECHO":
         sendEchoResponse(connection, parsedRequest.args[0]);
@@ -207,16 +198,15 @@ const server = net.createServer((connection) => {
         handleConfigGetRequest(connection, parsedRequest.args[0]);
         return;
       case "KEYS":
-        //const redis_key = getKeysValues(rdb);
-        //connection.write(serializeRESP([redis_key]));
+        // const [Rkey, Rvalue] = getKeysValues(rdb);
+        // connection.write(serializeRESP([Rkey]));
+        // return;
 
-        const [Rkey, Rvalue] = getKeysValues(rdb);
-        connection.write(serializeRESP([Rkey]));
+        const pattern = parsedRequest.args[0];
+        const filteredKeys = getFullData(rdb).filter(([key]) => key.startsWith(pattern));
+        const keys = filteredKeys.map(([key]) => key);
+        connection.write(serializeRESP([keys]));
         return;
-        case "*":
-          const redisFullData = getFullData(rdb);
-          connection.write(serializeRESP([redisFullData]));
-          return;
       default:
         connection.write("-ERR unsupported command\r\n");
         return;
