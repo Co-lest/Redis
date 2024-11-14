@@ -43,7 +43,7 @@ function getKeysValues(data) {
 
     cursor = redisKeyLength + 1 + cursor
     const redisVLength = data[cursor];
-    const redisV = data.subarray(cursor + 1, 1 + cursor + redisVLength + 1).tostring();
+    const redisV = data.subarray(cursor + 1, 1 + cursor + redisVLength + 1).toString();
     return [redisKey, redisV];
 }
 
