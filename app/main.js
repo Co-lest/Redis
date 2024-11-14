@@ -26,8 +26,8 @@ if (config.get("dir") && config.get("dbfilename")) {
   if (isDbExists) {
     rdb = fs.readFileSync(dbPath);
     if (!rdb) {
-      throw `Error reading DB at provided path: ${dbPath}`;
-      //console.error(`Error reading DB at provided path: ${dbPath}`);
+      //throw `Error reading DB at provided path: ${dbPath}`;
+      console.error(`Error reading DB at provided path: ${dbPath}`);
     } else {
       const [redisKey, redisValue] = getKeysValues(rdb);
       dataStore.set(redisKey, redisValue);
