@@ -26,7 +26,6 @@ if (config.get("dir") && config.get("dbfilename")) {
   if (isDbExists) {
     rdb = fs.readFileSync(dbPath);
     if (!rdb) {
-      //throw `Error reading DB at provided path: ${dbPath}`;
       console.error(`Error reading DB at provided path: ${dbPath}`);
     } else {
       const [redisKey, redisValue] = getKeysValues(rdb);
@@ -34,7 +33,6 @@ if (config.get("dir") && config.get("dbfilename")) {
       console.log("rdb", redisKey, redisValue);
     }
   } else {
-    //console.log(`DB doesn't exists at provided path: ${dbPath}`);
     console.error(`DB doesn't exists at provided path: ${dbPath}`);
   }
 }
@@ -45,7 +43,7 @@ const serializeRESP = (obj) => {
   let resp = "";
   switch (typeof obj) {
     case "object":
-      if (obj.constructor === Array) {
+      if (Array.isArray(obj)) {
         const arrLen = obj.length;
         resp += `*${arrLen}\r\n`;
         for (let i = 0; i < arrLen; i++) {
@@ -58,21 +56,17 @@ const serializeRESP = (obj) => {
       resp += `$${strLen}\r\n`;
       resp += `${obj}\r\n`;
       return resp;
-    case "number":
-    case "bigint":
-    case "boolean":
-    case "undefined":
     default:
-      break;
+      return `$-1\r\n`;
   }
 };
+
 const parseRESP = (arrRESP) => {
   for (let i = 0; i < arrRESP.length; i++) {
     const element = arrRESP.shift();
     switch (element[0]) {
       case "*":
-        // array
-        const arrlen = element.slice(1);
+        const arrlen = parseInt(element.slice(1));
         const arr = [];
         for (let j = 0; j < arrlen; j++) {
           const parsedContent = parseRESP(arrRESP);
@@ -81,37 +75,34 @@ const parseRESP = (arrRESP) => {
         }
         return arr;
       case "$":
-        // bulk string
         const str = arrRESP.shift();
         return { content: str, arrRESP };
       case ":":
-        // integer
-        const integer = element.slice(1);
-        return { content: Number(integer), arrRESP };
+        const integer = parseInt(element.slice(1));
+        return { content: integer, arrRESP };
       default:
         break;
     }
   }
 };
+
 const parseRequest = (arrRequest) => {
   const splitedRequest = arrRequest.split("\r\n");
   const parsedRESP = parseRESP(splitedRequest);
   const command = parsedRESP.shift();
 
   switch (command.toUpperCase()) {
-    //TODO: add handling for two word commands
     case "CONFIG":
       const scndPart = parsedRESP.shift();
       if (scndPart) {
         return {
-          commandName: command.toUpperCase() + " " + scndPart.toUpperCase(),
+          commandName: `${command.toUpperCase()} ${scndPart.toUpperCase()}`,
           args: parsedRESP,
         };
-      } else {
-        return {
-          commandName: command.toUpperCase(),
-        };
       }
+      return {
+        commandName: command.toUpperCase(),
+      };
     default:
       return {
         commandName: command.toUpperCase(),
@@ -119,24 +110,31 @@ const parseRequest = (arrRequest) => {
       };
   }
 };
+
 const sendPongResponse = (connection) => {
   connection.write("+PONG\r\n");
 };
+
 const sendEchoResponse = (connection, content) => {
   connection.write(`+${content}\r\n`);
 };
+
 const handleSetRequest = (connection, key, value, px) => {
   dataStore.set(key, value);
-  expiryList.set(key, Date.now() + Number(px));
+  if (px) {
+    expiryList.set(key, Date.now() + Number(px));
+  }
   connection.write("+OK\r\n");
 };
+
 const handleGetRequest = (connection, key) => {
   const element = dataStore.get(key);
   if (!element) {
     connection.write(`$-1\r\n`);
     return;
   }
-  if (expiryList.get(key) <= Date.now()) {
+  const expiry = expiryList.get(key);
+  if (expiry && expiry <= Date.now()) {
     dataStore.delete(key);
     expiryList.delete(key);
     connection.write(`$-1\r\n`);
@@ -144,75 +142,70 @@ const handleGetRequest = (connection, key) => {
     connection.write(`+${element}\r\n`);
   }
 };
+
 const handleConfigGetRequest = (connection, key) => {
   const value = config.get(key);
   connection.write(serializeRESP([key, value]));
 };
 
+const handleKeysRequest = (connection, pattern) => {
+  if (pattern === "*") {
+    try {
+      const keys = getFullData(rdb);
+      connection.write(serializeRESP(keys));
+    } catch (error) {
+      console.error("Error getting full data:", error);
+      connection.write("*0\r\n");
+    }
+    return;
+  }
+  
+  try {
+    const [key] = getKeysValues(rdb);
+    connection.write(serializeRESP([key]));
+  } catch (error) {
+    console.error("Error getting key-value:", error);
+    connection.write("*0\r\n");
+  }
+};
+
 const server = net.createServer((connection) => {
   console.log("connected");
+  
   connection.on("data", (stream) => {
     const arrayRequest = stream.toString();
     const parsedRequest = parseRequest(arrayRequest);
     console.log(parsedRequest);
 
-    // if (parsedRequest.args[0] === "*" && parsedRequest.commandName == "KEYS") { 
-    //   const redisFullData = getFullData(rdb);
-    //   connection.write(serializeRESP([redisFullData]));
-    //   return;
-    // }
-
     switch (parsedRequest.commandName) {
       case "ECHO":
         sendEchoResponse(connection, parsedRequest.args[0]);
-        return;
+        break;
       case "PING":
         sendPongResponse(connection);
-        return;
+        break;
       case "SET":
         if (!parsedRequest.args[2]) {
-          handleSetRequest(
-            connection,
-            parsedRequest.args[0],
-            parsedRequest.args[1]
-          );
-          return;
+          handleSetRequest(connection, parsedRequest.args[0], parsedRequest.args[1]);
+        } else if (parsedRequest.args[2].toUpperCase() === "PX") {
+          handleSetRequest(connection, parsedRequest.args[0], parsedRequest.args[1], parsedRequest.args[3]);
         }
-        switch (parsedRequest.args[2].toUpperCase()) {
-          case "PX":
-            handleSetRequest(
-              connection,
-              parsedRequest.args[0],
-              parsedRequest.args[1],
-              parsedRequest.args[3]
-            );
-            break;
-          default:
-            break;
-        }
-        return;
+        break;
       case "GET":
         handleGetRequest(connection, parsedRequest.args[0]);
-        return;
+        break;
       case "CONFIG GET":
         handleConfigGetRequest(connection, parsedRequest.args[0]);
-        return;
+        break;
       case "KEYS":
-        if (parsedRequest.args[0] == "*") {
-          const keys = getFullData(rdb)
-          connection.write(serializeRESP([keys]));
-          return;
-        }
-        const [Rkey, ] = getKeysValues(rdb); //Rvalue
-        connection.write(serializeRESP([Rkey]));
-        return;
+        handleKeysRequest(connection, parsedRequest.args[0]);
+        break;
       default:
         connection.write("-ERR unsupported command\r\n");
-        return;
     }
   });
 });
 
 server.listen(6379, "127.0.0.1", () => {
-  console.log("Connected to prt 127.0.0.1");
+  console.log("Connected to port 127.0.0.1");
 });
