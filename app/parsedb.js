@@ -38,13 +38,13 @@ function getKeysValues(data) {
 
 	cursor++;
 	const redisKeyLength = data[cursor];
-	const redisKey = data.subarray(cursor + 1, cursor + 1 + redisKeyLength).toString();
-	//return redisKey;
+	const redisK = data.subarray(cursor + 1, cursor + 1 + redisKeyLength).toString();
+	//return redisK;
 
 	cursor = cursor + 1 + redisKeyLength;
 	const redisValueLength = data[cursor];
-	const redisValue = data.subarray(cursor + 1, cursor + 1 + redisValueLength).toString();
-	return [redisKey, redisValue];
+	const redisV = data.subarray(cursor + 1, cursor + 1 + redisValueLength).toString();
+	return [redisK, redisV];
 }
 
 module.exports = {
