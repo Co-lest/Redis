@@ -162,6 +162,15 @@ const server = net.createServer((connection) => {
     //   return;
     // }
 
+    switch (parsedRequest.args[0]) {
+      case "*":
+        const redisFullData = getFullData(rdb);
+        connection.write(serializeRESP([redisFullData]));
+        return;
+      default:
+          connection.write("-ERR unsupported command\r\n");
+    }
+
     switch (parsedRequest.commandName) {
       case "ECHO":
         sendEchoResponse(connection, parsedRequest.args[0]);
