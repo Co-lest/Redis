@@ -48,16 +48,16 @@ function getKeysValues(data) {
 }// this function gets key value pairs the getFullData iw amt to  to get the full data help
 
 function getFullData(data) {
-	const keyValuePairs = [];
+	const values = [];
 	let cursor = 0;
   
 	while (cursor < data.length) {
-	  const [key, value] = getKeysValues(data.slice(cursor));
-	  keyValuePairs.push([key, value]);
-	  cursor += key.length + value.length + 9; // Adjust for overhead bytes
+	  const [, value] = getKeysValues(data.slice(cursor));
+	  values.push(value);
+	  cursor += value.length + 9; // Adjust for overhead bytes
 	}
   
-	return keyValuePairs;
+	return values;
 }
 
 module.exports = {

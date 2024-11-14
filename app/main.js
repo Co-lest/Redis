@@ -82,7 +82,6 @@ const parseRESP = (arrRESP) => {
         return arr;
       case "$":
         // bulk string
-        const strlen = element.slice(1);
         const str = arrRESP.shift();
         return { content: str, arrRESP };
       case ":":
@@ -157,7 +156,7 @@ const server = net.createServer((connection) => {
     const parsedRequest = parseRequest(arrayRequest);
     console.log(parsedRequest);
 
-    if (parsedRequest.args[0] == "*" ) { // && parsedRequest.commandName == "KEYS"
+    if (parsedRequest.args[0] === "*" && parsedRequest.commandName == "KEYS") { 
       const redisFullData = getFullData(rdb);
       connection.write(serializeRESP([redisFullData]));
       return;
