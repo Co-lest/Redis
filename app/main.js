@@ -156,7 +156,8 @@ const server = net.createServer((connection) => {
     const arrayRequest = stream.toString();
     const parsedRequest = parseRequest(arrayRequest);
     console.log(parsedRequest);
-    if (parseRequest.args == "*") {
+
+    if (parsedRequest.args[0] == "*" && parsedRequest.commandName == "KEYS") {
       const redisFullData = getFullData(rdb);
       connection.write(serializeRESP([redisFullData]));
       return;
