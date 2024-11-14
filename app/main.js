@@ -1,7 +1,7 @@
 const net = require("net");
 const fs = require("fs");
 const { join } = require("path");
-const { getKeysValues } = require("./parsedb");
+const { getKeysValues, getFullData } = require("./parsedb");
 
 const arguments = process.argv.slice(2);
 
@@ -98,6 +98,7 @@ const parseRequest = (arrRequest) => {
   const splitedRequest = arrRequest.split("\r\n");
   const parsedRESP = parseRESP(splitedRequest);
   const command = parsedRESP.shift();
+
   switch (command.toUpperCase()) {
     //TODO: add handling for two word commands
     case "CONFIG":
@@ -155,6 +156,7 @@ const server = net.createServer((connection) => {
     const arrayRequest = stream.toString();
     const parsedRequest = parseRequest(arrayRequest);
     console.log(parsedRequest);
+
     switch (parsedRequest.commandName) {
       case "ECHO":
         sendEchoResponse(connection, parsedRequest.args[0]);
@@ -197,6 +199,10 @@ const server = net.createServer((connection) => {
         const [Rkey, Rvalue] = getKeysValues(rdb);
         connection.write(serializeRESP([Rkey]));
         return;
+        case "*":
+          const redisFullData = getFullData(rdb);
+          connection.write(serializeRESP([redisFullData]));
+          return;
       default:
         connection.write("-ERR unsupported command\r\n");
         return;

@@ -45,8 +45,22 @@ function getKeysValues(data) {
 	const redisValueLength = data[cursor];
 	const redisV = data.subarray(cursor + 1, cursor + 1 + redisValueLength).toString();
 	return [redisK, redisV];
+}// this function gets key value pairs the getFullData iw amt to  to get the full data help
+
+function getFullData(data) {
+	const keyValuePairs = [];
+	let cursor = 0;
+  
+	while (cursor < data.length) {
+	  const [key, value] = getKeysValues(data.slice(cursor));
+	  keyValuePairs.push([key, value]);
+	  cursor += key.length + value.length + 9; // Adjust for overhead bytes
+	}
+  
+	return keyValuePairs;
 }
 
 module.exports = {
 	getKeysValues,
+	getFullData,
 };
