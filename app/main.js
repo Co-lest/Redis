@@ -198,14 +198,13 @@ const server = net.createServer((connection) => {
         handleConfigGetRequest(connection, parsedRequest.args[0]);
         return;
       case "KEYS":
-        // const [Rkey, Rvalue] = getKeysValues(rdb);
-        // connection.write(serializeRESP([Rkey]));
-        // return;
-
-        const pattern = parsedRequest.args[0];
-        const filteredKeys = getFullData(rdb).filter(([key]) => key.startsWith(pattern));
-        const keys = filteredKeys.map(([key]) => key);
-        connection.write(serializeRESP([keys]));
+        if (parsedRequest.args[0] == "*") {
+          const keys = getFullData(rdb)
+          connection.write(serializeRESP([keys]));
+          return;
+        }
+        const [Rkey, ] = getKeysValues(rdb); //Rvalue
+        connection.write(serializeRESP([Rkey]));
         return;
       default:
         connection.write("-ERR unsupported command\r\n");
