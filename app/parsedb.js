@@ -58,5 +58,4 @@ function getKeysValues(data) {
 
 module.exports = {
 	getKeysValues,
-	getFullData,
 };
