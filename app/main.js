@@ -49,9 +49,8 @@ const serializeRESP = (obj) => {
         for (let i = 0; i < arrLen; i++) {
           resp += serializeRESP(obj[i]);
         }
-        return resp;
       }
-      return `$-1\r\n`;
+      return resp;
     case "string":
       const strLen = obj.length;
       resp += `$${strLen}\r\n`;
@@ -150,22 +149,10 @@ const handleConfigGetRequest = (connection, key) => {
 };
 
 const handleKeysRequest = (connection, pattern) => {
-  if (!rdb || rdb.length === 0) {
-    connection.write("*0\r\n");
-    return;
-  }
-
   if (pattern === "*") {
     try {
-      // Get all values and duplicate each 5 times to match the expected output
-      const values = getFullData(rdb);
-      const repeatedValues = [];
-      values.forEach(value => {
-        for (let i = 0; i < 5; i++) {
-          repeatedValues.push(value);
-        }
-      });
-      connection.write(serializeRESP(repeatedValues));
+      const keys = getFullData(rdb);
+      connection.write(serializeRESP(keys));
     } catch (error) {
       console.error("Error getting full data:", error);
       connection.write("*0\r\n");
@@ -193,26 +180,26 @@ const server = net.createServer((connection) => {
     switch (parsedRequest.commandName) {
       case "ECHO":
         sendEchoResponse(connection, parsedRequest.args[0]);
-        break;
+        return;
       case "PING":
         sendPongResponse(connection);
-        break;
+        return;
       case "SET":
         if (!parsedRequest.args[2]) {
           handleSetRequest(connection, parsedRequest.args[0], parsedRequest.args[1]);
         } else if (parsedRequest.args[2].toUpperCase() === "PX") {
           handleSetRequest(connection, parsedRequest.args[0], parsedRequest.args[1], parsedRequest.args[3]);
         }
-        break;
+        return;
       case "GET":
         handleGetRequest(connection, parsedRequest.args[0]);
-        break;
+        return;
       case "CONFIG GET":
         handleConfigGetRequest(connection, parsedRequest.args[0]);
-        break;
+        return;
       case "KEYS":
         handleKeysRequest(connection, parsedRequest.args[0]);
-        break;
+        return;
       default:
         connection.write("-ERR unsupported command\r\n");
     }
