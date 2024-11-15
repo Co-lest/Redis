@@ -43,18 +43,35 @@ const serializeRESP = (obj) => {
   if (Array.isArray(obj)) {
     let resp = `*${obj.length}\r\n`;
     for (const item of obj) {
-      resp += `$${item.length}\r\n${item}\r\n`;
+      if (typeof item === "string") {
+        resp += `$${Buffer.byteLength(item, 'utf-8')}\r\n${item}\r\n`;
+      } else if (item === null || item === undefined) {
+        resp += "$-1\r\n";
+      } else {
+        // If the item is not a string, convert it to a string for RESP bulk format
+        const itemStr = String(item);
+        resp += `$${Buffer.byteLength(itemStr, 'utf-8')}\r\n${itemStr}\r\n`;
+      }
     }
     return resp;
   }
 
   if (typeof obj === "string") {
-    return `$${obj.length}\r\n${obj}\r\n`;
+    return `$${Buffer.byteLength(obj, 'utf-8')}\r\n${obj}\r\n`;
   }
 
-  // Default for unsupported types
-  return `$-1\r\n`;
+  if (typeof obj === "number") {
+    return `:${obj}\r\n`;
+  }
+
+  if (obj === null || obj === undefined) {
+    return "$-1\r\n";
+  }
+
+  console.error("Unsupported data type in serializeRESP:", typeof obj);
+  return "$-1\r\n";
 };
+
 
 
 const parseRESP = (arrRESP) => {
