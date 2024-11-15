@@ -1,7 +1,7 @@
 const net = require("net");
 const fs = require("fs");
 const { join } = require("path");
-const { getKeysValues, getFullData } = require("./parsedb");
+const { getFullData, getKeysValues } = require("./parsedb");
 
 const arguments = process.argv.slice(2);
 
@@ -26,6 +26,7 @@ if (config.get("dir") && config.get("dbfilename")) {
   if (isDbExists) {
     rdb = fs.readFileSync(dbPath);
     if (!rdb) {
+      //throw `Error reading DB at provided path: ${dbPath}`;
       console.error(`Error reading DB at provided path: ${dbPath}`);
     } else {
       const [redisKey, redisValue] = getKeysValues(rdb);
@@ -33,6 +34,7 @@ if (config.get("dir") && config.get("dbfilename")) {
       console.log("rdb", redisKey, redisValue);
     }
   } else {
+    //console.log(`DB doesn't exists at provided path: ${dbPath}`);
     console.error(`DB doesn't exists at provided path: ${dbPath}`);
   }
 }
@@ -40,46 +42,37 @@ if (config.get("dir") && config.get("dbfilename")) {
 console.log("Logs from your program will appear here!");
 
 const serializeRESP = (obj) => {
-  if (Array.isArray(obj)) {
-    let resp = `*${obj.length}\r\n`;
-    for (const item of obj) {
-      if (typeof item === "string") {
-        resp += `$${Buffer.byteLength(item, 'utf-8')}\r\n${item}\r\n`;
-      } else if (item === null || item === undefined) {
-        resp += "$-1\r\n";
-      } else {
-        // If the item is not a string, convert it to a string for RESP bulk format
-        const itemStr = String(item);
-        resp += `$${Buffer.byteLength(itemStr, 'utf-8')}\r\n${itemStr}\r\n`;
+  let resp = "";
+  switch (typeof obj) {
+    case "object":
+      if (obj.constructor === Array) {
+        const arrLen = obj.length;
+        resp += `*${arrLen}\r\n`;
+        for (let i = 0; i < arrLen; i++) {
+          resp += serializeRESP(obj[i]);
+        }
       }
-    }
-    return resp;
+      return resp;
+    case "string":
+      const strLen = obj.length;
+      resp += `$${strLen}\r\n`;
+      resp += `${obj}\r\n`;
+      return resp;
+    case "number":
+    case "bigint":
+    case "boolean":
+    case "undefined":
+    default:
+      break;
   }
-
-  if (typeof obj === "string") {
-    return `$${Buffer.byteLength(obj, 'utf-8')}\r\n${obj}\r\n`;
-  }
-
-  if (typeof obj === "number") {
-    return `:${obj}\r\n`;
-  }
-
-  if (obj === null || obj === undefined) {
-    return "$-1\r\n";
-  }
-
-  console.error("Unsupported data type in serializeRESP:", typeof obj);
-  return "$-1\r\n";
 };
-
-
-
 const parseRESP = (arrRESP) => {
   for (let i = 0; i < arrRESP.length; i++) {
     const element = arrRESP.shift();
     switch (element[0]) {
       case "*":
-        const arrlen = parseInt(element.slice(1));
+        // array
+        const arrlen = element.slice(1);
         const arr = [];
         for (let j = 0; j < arrlen; j++) {
           const parsedContent = parseRESP(arrRESP);
@@ -88,34 +81,37 @@ const parseRESP = (arrRESP) => {
         }
         return arr;
       case "$":
+        // bulk string
+        const strlen = element.slice(1);
         const str = arrRESP.shift();
         return { content: str, arrRESP };
       case ":":
-        const integer = parseInt(element.slice(1));
-        return { content: integer, arrRESP };
+        // integer
+        const integer = element.slice(1);
+        return { content: Number(integer), arrRESP };
       default:
         break;
     }
   }
 };
-
 const parseRequest = (arrRequest) => {
   const splitedRequest = arrRequest.split("\r\n");
   const parsedRESP = parseRESP(splitedRequest);
   const command = parsedRESP.shift();
-
   switch (command.toUpperCase()) {
+    //TODO: add handling for two word commands
     case "CONFIG":
       const scndPart = parsedRESP.shift();
       if (scndPart) {
         return {
-          commandName: `${command.toUpperCase()} ${scndPart.toUpperCase()}`,
+          commandName: command.toUpperCase() + " " + scndPart.toUpperCase(),
           args: parsedRESP,
         };
+      } else {
+        return {
+          commandName: command.toUpperCase(),
+        };
       }
-      return {
-        commandName: command.toUpperCase(),
-      };
     default:
       return {
         commandName: command.toUpperCase(),
@@ -123,31 +119,24 @@ const parseRequest = (arrRequest) => {
       };
   }
 };
-
 const sendPongResponse = (connection) => {
   connection.write("+PONG\r\n");
 };
-
 const sendEchoResponse = (connection, content) => {
   connection.write(`+${content}\r\n`);
 };
-
 const handleSetRequest = (connection, key, value, px) => {
   dataStore.set(key, value);
-  if (px) {
-    expiryList.set(key, Date.now() + Number(px));
-  }
+  expiryList.set(key, Date.now() + Number(px));
   connection.write("+OK\r\n");
 };
-
 const handleGetRequest = (connection, key) => {
   const element = dataStore.get(key);
   if (!element) {
     connection.write(`$-1\r\n`);
     return;
   }
-  const expiry = expiryList.get(key);
-  if (expiry && expiry <= Date.now()) {
+  if (expiryList.get(key) <= Date.now()) {
     dataStore.delete(key);
     expiryList.delete(key);
     connection.write(`$-1\r\n`);
@@ -155,56 +144,17 @@ const handleGetRequest = (connection, key) => {
     connection.write(`+${element}\r\n`);
   }
 };
-
 const handleConfigGetRequest = (connection, key) => {
   const value = config.get(key);
   connection.write(serializeRESP([key, value]));
 };
 
-const handleKeysRequest = (connection, pattern) => {
-  if (pattern === "*") {
-    try {
-      const keys = [];
-      let cursor = 0;
-
-      // Extract all keys iteratively
-      while (cursor < rdb.length) {
-        try {
-          const [key, value] = getKeysValues(rdb.slice(cursor));
-          keys.push(key); // Add the extracted key
-          cursor += key.length + value.length + 9; // Adjust cursor for overhead bytes
-        } catch (e) {
-          console.error("Error processing key-value pair:", e);
-          break;
-        }
-      }
-
-      connection.write(serializeRESP(keys)); // Respond with all keys
-    } catch (error) {
-      console.error("Error retrieving keys:", error);
-      connection.write("*0\r\n"); // Respond with an empty array on failure
-    }
-    return;
-  }
-
-  // Handle specific key pattern (not "*")
-  try {
-    const [key] = getKeysValues(rdb);
-    connection.write(serializeRESP([key]));
-  } catch (error) {
-    console.error("Error retrieving single key:", error);
-    connection.write("*0\r\n");
-  }
-};
-
 const server = net.createServer((connection) => {
   console.log("connected");
-  
   connection.on("data", (stream) => {
     const arrayRequest = stream.toString();
     const parsedRequest = parseRequest(arrayRequest);
     console.log(parsedRequest);
-
     switch (parsedRequest.commandName) {
       case "ECHO":
         sendEchoResponse(connection, parsedRequest.args[0]);
@@ -214,9 +164,24 @@ const server = net.createServer((connection) => {
         return;
       case "SET":
         if (!parsedRequest.args[2]) {
-          handleSetRequest(connection, parsedRequest.args[0], parsedRequest.args[1]);
-        } else if (parsedRequest.args[2].toUpperCase() === "PX") {
-          handleSetRequest(connection, parsedRequest.args[0], parsedRequest.args[1], parsedRequest.args[3]);
+          handleSetRequest(
+            connection,
+            parsedRequest.args[0],
+            parsedRequest.args[1]
+          );
+          return;
+        }
+        switch (parsedRequest.args[2].toUpperCase()) {
+          case "PX":
+            handleSetRequest(
+              connection,
+              parsedRequest.args[0],
+              parsedRequest.args[1],
+              parsedRequest.args[3]
+            );
+            break;
+          default:
+            break;
         }
         return;
       case "GET":
@@ -226,14 +191,25 @@ const server = net.createServer((connection) => {
         handleConfigGetRequest(connection, parsedRequest.args[0]);
         return;
       case "KEYS":
-        handleKeysRequest(connection, parsedRequest.args[0]);
+        //const redis_key = getKeysValues(rdb);
+        //connection.write(serializeRESP([redis_key]));
+
+        if (parsedRequest.args[0] == "*") {
+          const fullData = getFullData(rdb)
+          connection.write(serializeRESP([fullData]))
+          return
+        }
+
+        const [Rkey, ] = getKeysValues(rdb);
+        connection.write(serializeRESP([Rkey]));
         return;
       default:
         connection.write("-ERR unsupported command\r\n");
+        return;
     }
   });
 });
 
 server.listen(6379, "127.0.0.1", () => {
-  console.log("Connected to port 127.0.0.1");
+  console.log("Connected to prt 127.0.0.1");
 });
