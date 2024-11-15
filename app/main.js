@@ -151,15 +151,24 @@ const handleConfigGetRequest = (connection, key) => {
 const handleKeysRequest = (connection, pattern) => {
   if (pattern === "*") {
     try {
-      const keys = getFullData(rdb);
+      const keys = [];
+      let cursor = 0;
+
+      // Iterate through the database to extract all keys
+      while (cursor < rdb.length) {
+        const [key, value] = getKeysValues(rdb.slice(cursor));
+        keys.push(key); 
+        cursor += key.length + value.length + 9; // Adjust for overhead bytes
+      }
+
       connection.write(serializeRESP(keys));
     } catch (error) {
-      console.error("Error getting full data:", error);
+      console.error("Error getting keys:", error);
       connection.write("*0\r\n");
     }
     return;
   }
-  
+
   try {
     const [key] = getKeysValues(rdb);
     connection.write(serializeRESP([key]));
