@@ -1,17 +1,27 @@
 const { redisMagic, codes } = require('./data.js');
 
 function handleLengthEncoding(data, cursor) {
-	const byte = data[cursor];
-	const lengthType = (byte & 0b11000000) >> 6;
-	const lengthValues = [
-		[byte & 0b00111111, cursor + 1],
-		[((byte & 0b00111111) << 8) | data[cursor + 1], cursor + 2],
-		[data.readUInt32BE(cursor + 1), cursor + 5],
-	];
-	return (
-		lengthValues[lengthType] || new Error(`Invalid length encoding ${lengthType} at ${cursor}`)
-	);
+  if (cursor >= data.length) {
+    throw new RangeError(`Cursor out of bounds at ${cursor}`);
+  }
+
+  const byte = data[cursor];
+  const lengthType = (byte & 0b11000000) >> 6;
+
+  switch (lengthType) {
+    case 0:
+      return [byte & 0b00111111, cursor + 1]; // 6-bit length
+    case 1:
+      if (cursor + 1 >= data.length) throw new RangeError(`Cursor out of bounds at ${cursor + 1}`);
+      return [((byte & 0b00111111) << 8) | data[cursor + 1], cursor + 2]; // 14-bit length
+    case 2:
+      if (cursor + 4 >= data.length) throw new RangeError(`Cursor out of bounds at ${cursor + 4}`);
+      return [data.readUInt32BE(cursor + 1), cursor + 5]; // 32-bit length
+    default:
+      throw new Error(`Invalid length encoding type ${lengthType} at cursor ${cursor}`);
+  }
 }
+
 
 function getKeysValues(data) {
   const { REDIS_MAGIC_STRING, REDIS_VERSION } = redisMagic;
