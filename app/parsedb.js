@@ -15,60 +15,46 @@ function handleLengthEncoding(data, cursor) {
 
 function getKeysValues(data) {
   const { REDIS_MAGIC_STRING, REDIS_VERSION } = redisMagic;
-  let cursor = REDIS_MAGIC_STRING + REDIS_VERSION; // Skip the header
+  let cursor = REDIS_MAGIC_STRING + REDIS_VERSION;
 
   while (cursor < data.length) {
     if (data[cursor] === codes.SELECTDB) {
-      cursor++; // Skip the SELECTDB byte
-      continue; // Ignore database selection for this task
+      cursor++; // Skip SELECTDB opcode
+      continue;
     }
 
-    cursor++; // Move to the next byte after a valid opcode
+    cursor++;
 
     // Decode key length
     let keyLength;
     [keyLength, cursor] = handleLengthEncoding(data, cursor);
 
-    // Extract key
-    const key = data.subarray(cursor, cursor + keyLength).toString();
-    console.log("Extracted key:", key, "at cursor:", cursor);
+    // Extract key and trim unwanted characters
+    const key = data.subarray(cursor, cursor + keyLength).toString().replace(/\x00|\t/g, "");
+    console.log("Extracted key:", key);
     cursor += keyLength;
 
     // Decode value length
     let valueLength;
     [valueLength, cursor] = handleLengthEncoding(data, cursor);
 
-    // Extract value
+    // Extract value (not used in `KEYS *` but extracted for completeness)
     const value = data.subarray(cursor, cursor + valueLength).toString();
-    console.log("Extracted value:", value, "at cursor:", cursor);
+    console.log("Extracted value:", value);
     cursor += valueLength;
 
     // Handle expiration time if present
     if (data[cursor] === codes.EXPIRETIME || data[cursor] === codes.EXPIRETIMEMS) {
-      cursor++; // Skip the expiration opcode
-      cursor += 4; // Skip expiration timestamp (4 bytes)
+      cursor++;
+      cursor += 4; // Skip expiration timestamp
     }
 
-    // Return the extracted key-value pair
     return [key, value];
   }
 
   throw new Error("Reached end of data without finding a key-value pair.");
 }
 
-
-function getFullData(data) {
-	const values = [];
-	let cursor = 0;
-  
-	while (cursor < data.length) {
-	  const [, value] = getKeysValues(data.slice(cursor));
-	  values.push(value);
-	  cursor += value.length + 9; // Adjust for overhead bytes
-	}
-  
-	return values;
-}
 
 module.exports = {
 	getKeysValues,

@@ -40,26 +40,22 @@ if (config.get("dir") && config.get("dbfilename")) {
 console.log("Logs from your program will appear here!");
 
 const serializeRESP = (obj) => {
-  let resp = "";
-  switch (typeof obj) {
-    case "object":
-      if (Array.isArray(obj)) {
-        const arrLen = obj.length;
-        resp += `*${arrLen}\r\n`;
-        for (let i = 0; i < arrLen; i++) {
-          resp += serializeRESP(obj[i]);
-        }
-      }
-      return resp;
-    case "string":
-      const strLen = obj.length;
-      resp += `$${strLen}\r\n`;
-      resp += `${obj}\r\n`;
-      return resp;
-    default:
-      return `$-1\r\n`;
+  if (Array.isArray(obj)) {
+    let resp = `*${obj.length}\r\n`;
+    for (const item of obj) {
+      resp += `$${item.length}\r\n${item}\r\n`;
+    }
+    return resp;
   }
+
+  if (typeof obj === "string") {
+    return `$${obj.length}\r\n${obj}\r\n`;
+  }
+
+  // Default for unsupported types
+  return `$-1\r\n`;
 };
+
 
 const parseRESP = (arrRESP) => {
   for (let i = 0; i < arrRESP.length; i++) {
