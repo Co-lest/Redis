@@ -156,28 +156,25 @@ const handleKeysRequest = (connection, pattern) => {
 
       // Extract all keys iteratively
       while (cursor < rdb.length) {
-        const [key, value] = getKeysValues(rdb.slice(cursor));
-
-        if (!key) break; // Stop if no key is found
-        keys.push(key);
-
-        cursor += key.length + value.length + 9; // Adjust for overhead bytes
+        try {
+          const [key, value] = getKeysValues(rdb.slice(cursor));
+          keys.push(key); // Add the extracted key
+          cursor += key.length + value.length + 9; // Adjust cursor for overhead bytes
+        } catch (e) {
+          console.error("Error processing key-value pair:", e);
+          break;
+        }
       }
 
-      if (keys.length === 0) {
-        console.error("No keys found in RDB data");
-        connection.write("*0\r\n");
-        return;
-      }
-
-      connection.write(serializeRESP(keys));
+      connection.write(serializeRESP(keys)); // Respond with all keys
     } catch (error) {
       console.error("Error retrieving keys:", error);
-      connection.write("*0\r\n");
+      connection.write("*0\r\n"); // Respond with an empty array on failure
     }
     return;
   }
 
+  // Handle specific key pattern (not "*")
   try {
     const [key] = getKeysValues(rdb);
     connection.write(serializeRESP([key]));
@@ -186,7 +183,6 @@ const handleKeysRequest = (connection, pattern) => {
     connection.write("*0\r\n");
   }
 };
-
 
 const server = net.createServer((connection) => {
   console.log("connected");

@@ -14,40 +14,48 @@ function handleLengthEncoding(data, cursor) {
 }
 
 function getKeysValues(data) {
-	const { REDIS_MAGIC_STRING, REDIS_VERSION } = redisMagic;
-	let cursor = REDIS_MAGIC_STRING + REDIS_VERSION;
+  const { REDIS_MAGIC_STRING, REDIS_VERSION } = redisMagic;
+  let cursor = REDIS_MAGIC_STRING + REDIS_VERSION; // Skip the header
 
-	while (cursor < data.length) {
-		if (data[cursor] === codes.SELECTDB) {
-			break;
-		}
-		cursor++;
-	}
+  while (cursor < data.length) {
+    if (data[cursor] === codes.SELECTDB) {
+      cursor++; // Skip the SELECTDB byte
+      continue; // Ignore database selection for this task
+    }
 
-	cursor++;
-	let length;
-	[length, cursor] = handleLengthEncoding(data, cursor);
-	cursor++;
-	[length, cursor] = handleLengthEncoding(data, cursor);
-	[length, cursor] = handleLengthEncoding(data, cursor);
+    cursor++; // Move to the next byte after a valid opcode
 
-	if (data[cursor] === codes.EXPIRETIME) {
-		cursor++;
-		cursor += 4;
-	}
+    // Decode key length
+    let keyLength;
+    [keyLength, cursor] = handleLengthEncoding(data, cursor);
 
-	cursor++;
-	const redisKeyLength = data[cursor];
-	const redisK = data.subarray(cursor + 1, cursor + 1 + redisKeyLength).toString();
-  console.log("Extracted key:", redisK, "at cursor:", cursor);
-	//return redisK;
+    // Extract key
+    const key = data.subarray(cursor, cursor + keyLength).toString();
+    console.log("Extracted key:", key, "at cursor:", cursor);
+    cursor += keyLength;
 
-	cursor = cursor + 1 + redisKeyLength;
-	const redisValueLength = data[cursor];
-	const redisV = data.subarray(cursor + 1, cursor + 1 + redisValueLength).toString();
-  console.log("Extracted value:", redisV, "at cursor:", cursor);
-	return [redisK, redisV];
+    // Decode value length
+    let valueLength;
+    [valueLength, cursor] = handleLengthEncoding(data, cursor);
+
+    // Extract value
+    const value = data.subarray(cursor, cursor + valueLength).toString();
+    console.log("Extracted value:", value, "at cursor:", cursor);
+    cursor += valueLength;
+
+    // Handle expiration time if present
+    if (data[cursor] === codes.EXPIRETIME || data[cursor] === codes.EXPIRETIMEMS) {
+      cursor++; // Skip the expiration opcode
+      cursor += 4; // Skip expiration timestamp (4 bytes)
+    }
+
+    // Return the extracted key-value pair
+    return [key, value];
+  }
+
+  throw new Error("Reached end of data without finding a key-value pair.");
 }
+
 
 function getFullData(data) {
 	const values = [];
