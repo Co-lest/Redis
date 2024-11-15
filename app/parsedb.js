@@ -37,8 +37,9 @@ function getKeysValues(data) {
 	}
 
 	cursor++;
+  let data1 = data
 	const redisKeyLength = data[cursor];
-	const redisK = data.subarray(cursor + 1, cursor + 1 + redisKeyLength).toString();
+	const redisK = data1.subarray(cursor + 1, cursor + 1 + redisKeyLength).toString();
   console.log("Extracted key:", redisK, "at cursor:", cursor);
 	//return redisK;
 
