@@ -1,215 +1,84 @@
 const net = require("net");
-const fs = require("fs");
-const { join } = require("path");
-const { getFullData, getKeysValues } = require("./parsedb");
+const { handleQuery } = require("./lib/handle_query");
+const { setRole } = require("./lib/utils");
+const { serverConf } = require("./global_cache/server_conf");
+const { masterCommunicate } = require("./lib/master_communicate");
+const {
+  handleReplicaCommunication,
+} = require("./lib/handle_replica_communication");
+const { readRdbFile } = require("./lib/read_rdb_file");
 
-const arguments = process.argv.slice(2);
-
-const dataStore = new Map();
-const expiryList = new Map();
-const config = new Map();
-
-let rdb;
-
-for (let i = 0; i < arguments.length; i++) {
-  const arg = arguments[i];
-  if (arg.startsWith("--")) {
-    config.set(arg.slice(2), arguments[i + 1]);
+// Loop through all the flags passed to code
+// node example.js -a -b -c
+// process.argv = [
+//   '/usr/bin/node',
+//   '/path/to/example.js',
+//   '-a',
+//   '-b',
+//   '-c'
+// ]
+for (let i = 2; i < process.argv.length; i++) {
+  if (process.argv[i] === "--port") {
+    serverConf.port = process.argv[i + 1];
+    i++;
+  }
+  // If --replicaof flag is present then the server is a slave server.
+  else if (process.argv[i] === "--replicaof") {
+		const masterHost = process.argv[i + 1].split(" ")
+    serverConf.isSlave = true;
+    serverConf.masterHost = masterHost[0];
+    serverConf.masterPort = masterHost[1];
+    console.log(
+      `Masterhost: ${serverConf.masterHost}, masterPort: ${serverConf.masterPort}`,
+    );
     i += 1;
+    setRole("slave");
+  } else if (process.argv[i] === "--dir") {
+    serverConf.rdb_dir = process.argv[i + 1];
+    i++;
+  } else if (process.argv[i] === "--dbfilename") {
+    serverConf.rdb_file = process.argv[i + 1];
+    readRdbFile();
+    i++;
   }
 }
 
-if (config.get("dir") && config.get("dbfilename")) {
-  const dbPath = join(config.get("dir"), config.get("dbfilename"));
-  const isDbExists = fs.existsSync(dbPath);
+if (!serverConf.isSlave) setRole("master");
 
-  if (isDbExists) {
-    rdb = fs.readFileSync(dbPath);
-    if (!rdb) {
-      //throw `Error reading DB at provided path: ${dbPath}`;
-      console.error(`Error reading DB at provided path: ${dbPath}`);
-    } else {
-      const [redisKey, redisValue] = getKeysValues(rdb);
-      dataStore.set(redisKey, redisValue);
-      console.log("rdb", redisKey, redisValue);
-    }
-  } else {
-    //console.log(`DB doesn't exists at provided path: ${dbPath}`);
-    console.error(`DB doesn't exists at provided path: ${dbPath}`);
-  }
-}
+/**
+ * If the current server is a slave then handshake with master
+ */
+const connectToMaster = () => {
+  const replicaSocket = net.createConnection(
+    serverConf.masterPort,
+    serverConf.masterHost,
+  );
 
+  // Handshake
+  replicaSocket.on("connect", () => {
+    masterCommunicate("ping", replicaSocket);
+  });
+
+  replicaSocket.on("data", (data) => {
+    handleReplicaCommunication(data.toString(), replicaSocket);
+  });
+};
+
+// You can use print statements as follows for debugging, they'll be visible when running tests.
 console.log("Logs from your program will appear here!");
 
-const serializeRESP = (obj) => {
-  let resp = "";
-  switch (typeof obj) {
-    case "object":
-      if (obj.constructor === Array) {
-        const arrLen = obj.length;
-        resp += `*${arrLen}\r\n`;
-        for (let i = 0; i < arrLen; i++) {
-          resp += serializeRESP(obj[i]);
-        }
-      }
-      return resp;
-    case "string":
-      const strLen = obj.length;
-      resp += `$${strLen}\r\n`;
-      resp += `${obj}\r\n`;
-      return resp;
-    case "number":
-    case "bigint":
-    case "boolean":
-    case "undefined":
-    default:
-      break;
-  }
-};
-const parseRESP = (arrRESP) => {
-  for (let i = 0; i < arrRESP.length; i++) {
-    const element = arrRESP.shift();
-    switch (element[0]) {
-      case "*":
-        // array
-        const arrlen = element.slice(1);
-        const arr = [];
-        for (let j = 0; j < arrlen; j++) {
-          const parsedContent = parseRESP(arrRESP);
-          arr.push(parsedContent.content);
-          arrRESP = parsedContent.arrRESP;
-        }
-        return arr;
-      case "$":
-        // bulk string
-        const strlen = element.slice(1);
-        const str = arrRESP.shift();
-        return { content: str, arrRESP };
-      case ":":
-        // integer
-        const integer = element.slice(1);
-        return { content: Number(integer), arrRESP };
-      default:
-        break;
-    }
-  }
-};
-const parseRequest = (arrRequest) => {
-  const splitedRequest = arrRequest.split("\r\n");
-  const parsedRESP = parseRESP(splitedRequest);
-  const command = parsedRESP.shift();
-  switch (command.toUpperCase()) {
-    //TODO: add handling for two word commands
-    case "CONFIG":
-      const scndPart = parsedRESP.shift();
-      if (scndPart) {
-        return {
-          commandName: command.toUpperCase() + " " + scndPart.toUpperCase(),
-          args: parsedRESP,
-        };
-      } else {
-        return {
-          commandName: command.toUpperCase(),
-        };
-      }
-    default:
-      return {
-        commandName: command.toUpperCase(),
-        args: parsedRESP,
-      };
-  }
-};
-const sendPongResponse = (connection) => {
-  connection.write("+PONG\r\n");
-};
-const sendEchoResponse = (connection, content) => {
-  connection.write(`+${content}\r\n`);
-};
-const handleSetRequest = (connection, key, value, px) => {
-  dataStore.set(key, value);
-  expiryList.set(key, Date.now() + Number(px));
-  connection.write("+OK\r\n");
-};
-const handleGetRequest = (connection, key) => {
-  const element = dataStore.get(key);
-  if (!element) {
-    connection.write(`$-1\r\n`);
-    return;
-  }
-  if (expiryList.get(key) <= Date.now()) {
-    dataStore.delete(key);
-    expiryList.delete(key);
-    connection.write(`$-1\r\n`);
-  } else {
-    connection.write(`+${element}\r\n`);
-  }
-};
-const handleConfigGetRequest = (connection, key) => {
-  const value = config.get(key);
-  connection.write(serializeRESP([key, value]));
-};
-
+// Uncomment this block to pass the first stage
 const server = net.createServer((connection) => {
-  console.log("connected");
-  connection.on("data", (stream) => {
-    const arrayRequest = stream.toString();
-    const parsedRequest = parseRequest(arrayRequest);
-    console.log(parsedRequest);
-    switch (parsedRequest.commandName) {
-      case "ECHO":
-        sendEchoResponse(connection, parsedRequest.args[0]);
-        return;
-      case "PING":
-        sendPongResponse(connection);
-        return;
-      case "SET":
-        if (!parsedRequest.args[2]) {
-          handleSetRequest(
-            connection,
-            parsedRequest.args[0],
-            parsedRequest.args[1]
-          );
-          return;
-        }
-        switch (parsedRequest.args[2].toUpperCase()) {
-          case "PX":
-            handleSetRequest(
-              connection,
-              parsedRequest.args[0],
-              parsedRequest.args[1],
-              parsedRequest.args[3]
-            );
-            break;
-          default:
-            break;
-        }
-        return;
-      case "GET":
-        handleGetRequest(connection, parsedRequest.args[0]);
-        return;
-      case "CONFIG GET":
-        handleConfigGetRequest(connection, parsedRequest.args[0]);
-        return;
-      case "KEYS":
-        //const redis_key = getKeysValues(rdb);
-        //connection.write(serializeRESP([redis_key]));
-
-        if (parsedRequest.args[0] == "*") {
-          const fullData = getFullData(rdb)
-          connection.write(serializeRESP([fullData]))
-          return
-        }
-
-        const [Rkey, ] = getKeysValues(rdb);
-        connection.write(serializeRESP([Rkey]));
-        return;
-      default:
-        connection.write("-ERR unsupported command\r\n");
-        return;
-    }
+  // Handle connection
+  connection.on("data", (data) => {
+    console.log("Unformated string", JSON.stringify(data.toString()));
+    handleQuery(data.toString(), connection);
   });
 });
 
-server.listen(6379, "127.0.0.1", () => {
-  console.log("Connected to prt 127.0.0.1");
-});
+server.listen(serverConf.port, "127.0.0.1");
+
+// If the server is slave send handshake to master
+if (serverConf.isSlave) {
+  connectToMaster();
+}
