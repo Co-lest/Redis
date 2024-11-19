@@ -62,5 +62,5 @@ const getFullData = (data) => {
 
 module.exports = {
 	getKeysValues,
-  getFullData,
+  	getFullData,
 };
